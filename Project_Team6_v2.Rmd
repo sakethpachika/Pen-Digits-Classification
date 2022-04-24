@@ -1,0 +1,475 @@
+---
+title: "Classification of hand written numeric digits"
+author: "TEAM 6 - Saketh Pachika, Sreevidya Baddam, Vivek Nichenametla"
+date: "4/30/2021"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Objective :**
+
+To build a multi-class classification model which can accurately classify the numeric digits written on a pressure sensitive tablet.
+
+**Data Overview:**
+
+The database created has 250 samples for each of 44 writers, 30 writers are used for training and 14 writers are used for testing purpose, The data-set is normalized and re-sampled such that each digit is represented by a sequence of 8 points as (x,y) coordinates, the data is scaled between 0-100
+
+The scaled data has no missing values and both the training and test data has the least imbalance.
+
+**Missing Data Plot:**
+
+```{r,echo=FALSE}
+library(DataExplorer) 
+data <-read.csv("train.csv")
+plot_missing(data)
+
+
+```
+
+**Model Building:**
+
+Different classification models are constructed and trained with the training data and further used them to classify the digits on the test data
+
+**Train-Test-Split**
+
+Going by the requirement, five random files of zip code digits '14260' have been separated from the training set. A data split of 70-30 is performed on training set, 70% data will be used to build model whereas the rest of the data will be used for validation and optimisation of model by tuning k value. In addition to that , k-fold validation was also performed, but for the little difference in the results. As k-fold is computationally expensive, 70-30 split preferred.
+
+**K-Nearest Neighbors:**
+
+*K-Nearest Neighbors* is a classification algorithm that uses feature-similarity to predict the values of new data-points which further means that the new data point will be assigned a value based on how closely it matches the points in the training set. It calculates the distance between test data and each row of training data with the help of the methods like Euclidean, based on which a class is assigned to the test point.
+
+The model is trained and tested for k values ranging from 1 to 15 and accuracy is obtained at each k value. Based on the efficiency, the model takes the optimum value of k as 5
+
+## KNN Confusion Matrix
+
+image : ![](./KNN.png)
+
+**Results:**
+
+Knn yielded best result of 99.1 when k is 5 on training set and 97.6 when tested on the testing file
+
+The KNN model accurately predicted the input files associated to digits 14260.
+
+## Multinomial logistic Regression
+
+*Multinomial logistic regression* is used to predict a nominal dependent variable given one or more independent variables. It is an extension of binomial logistic regression for more than two variables. Like binary logistic regression, multinomial logistic regression uses maximum likelihood estimation to evaluate the probability of categorical membership.
+
+The same 70-30 split of training data is performed. The train-test data gave an accuracy of 94%. The same model was run on testing data. The results are shown below.
+
+```{r,echo=FALSE,message=FALSE}
+library(readr)
+
+pendigits_tra <- read_csv("vidyapendigit_tra.csv")
+pendigits_tes <- read_csv("vidyapendigit_tes.csv")
+zipcodes <- read_csv("vidyazipcodes_test.csv")
+pendigits_tra$digit <- factor(pendigits_tra$digit)
+
+
+set.seed(10)
+smp_size <- floor(0.70 * nrow(pendigits_tra))
+train_ind <- sample(seq_len(nrow(pendigits_tra)), size = floor(0.70 * nrow(pendigits_tra)))
+training_set <- pendigits_tra[train_ind, ]
+testing_set <- pendigits_tra[-train_ind, ]
+x_train <- training_set[, -17]
+x_test <- testing_set[, -17]
+y_train <- training_set$digit
+y_test<-testing_set$digit
+
+###### multinomial logistic regression 
+###Training set
+library(foreign)
+library(nnet)
+library(stargazer)
+library(data.table) 
+library(dplyr)      
+library(ggplot2)  
+library(caret)     
+library(xgboost)    
+library(e1071)      
+library(cowplot)    
+library(Matrix)
+library(magrittr)
+library(DataExplorer)
+
+multinom_model <- multinom(digit ~ ., data = pendigits_tra)
+
+
+###Testing set
+set.seed(222)
+y_preds <- predict(multinom_model, newdata = pendigits_tes[, -17], "class")
+
+
+## For zip code digits 14260
+y_predss_zip <- predict(multinom_model, newdata = zipcodes[, -17], "class")
+
+
+####Graphhh- MLR
+data = data.frame(pendigits_tes$digit, y_preds)
+names(data) = c("Actual", "Predicted")
+actual = as.data.frame(table(data$Actual))
+names(actual) = c("Actual","ActualFreq")
+
+confusion = as.data.frame(table(data$Actual, data$Predicted))
+names(confusion) = c("Actual","Predicted","Freq")
+
+#calculate percentage of test cases based on actual frequency
+confusion = merge(confusion, actual)
+confusion$Percent = confusion$Freq/confusion$ActualFreq*100
+
+tile <- ggplot() +
+  geom_tile(aes(x=Actual, y=Predicted,fill=Percent),data=confusion, color="black",size=0.1) +
+  labs(x="Actual",y="Predicted")
+tile = tile + 
+  geom_text(aes(x=Actual,y=Predicted, label=sprintf("%.1f", Percent)),data=confusion, size=3, colour="black") +
+  scale_fill_gradient(low="grey",high="red")
+
+# lastly we draw diagonal tiles. We use alpha = 0 so as not to hide previous layers but use size=0.3 to highlight border
+tile = tile + 
+  geom_tile(aes(x=Actual,y=Predicted),data=subset(confusion, as.character(Actual)==as.character(Predicted)), color="black",size=0.3, fill="black", alpha=0) 
+
+#render
+tile
+
+
+```
+
+**Results:**
+
+The model gives an accuracy of 94% when tested on training set and 89.7% on the testing data set. MLR considers the data to be liner and it models the data as a liner combination of predictor variabes.
+
+The Multinomial regression predicted the 4 digits of the pincode 14260 correctly from the random files data set.
+
+## Naive_Bayes
+
+*Naive Bayes* is a family of probabilistic algorithms that take advantage of probability theory and Bayes' Theorem to predict the tag of a text (like a piece of news or a customer review). They are probabilistic, which means that they calculate the probability of each tag for a given text, and then output the tag with the highest one. The way they get these probabilities is by using Bayes' Theorem, which describes the probability of a feature, based on prior knowledge of conditions that might be related to that feature.
+
+Same training and testing split of the training data has been used. The train-test data gave an accuracy of 87.38%. The same model was run on testing data. The results are shown below.
+
+```{r,echo=FALSE,message=FALSE,table=FALSE}
+require(e1071)
+require(caret)
+pen_digits = read.csv("pendigits_training_f.csv")
+
+pen_digits$Digit <- as.factor(pen_digits$Digit)
+set.seed(1286)
+train = sample(1:nrow(pen_digits), floor(0.8 * nrow(pen_digits)))
+
+nb.pen_digits = naiveBayes(Digit~., data=pen_digits[train, ])
+nb.predict = predict(nb.pen_digits, pen_digits[-train, ], type="class")
+
+nb.cm = confusionMatrix(table(nb.predict, pen_digits[-train, ]$Digit))
+
+
+##Test data 
+pen_digits_testdata=read.csv("pen_digits_tesfile.csv")
+pen_digits_testdata$Digit <- as.factor(pen_digits_testdata$Digit)
+nb.predict_test_data = predict(nb.pen_digits, pen_digits_testdata, type="class")
+#with(pen_digits_testdata, table(rf.predict_test_data, Digit))
+nb.cm = confusionMatrix(table(nb.predict_test_data,pen_digits_testdata$Digit))
+
+
+#Pincode test
+pen_digits_pincode=read.csv("pen_digits_predict_f.csv")
+pen_digits_pincode$Digit <- as.factor(pen_digits_pincode$Digit)
+pendigits_pincode_pred_nb = predict(nb.pen_digits, pen_digits_pincode, type="class")
+
+
+
+
+##Heat-map CM
+#generate random data 
+data = data.frame(pen_digits_testdata$Digit,nb.predict_test_data)
+names(data) = c("Actual", "Predicted")
+
+#compute frequency of actual categories
+actual = as.data.frame(table(data$Actual))
+names(actual) = c("Actual","ActualFreq")
+
+#build confusion matrix
+confusion = as.data.frame(table(data$Actual, data$Predicted))
+names(confusion) = c("Actual","Predicted","Freq")
+
+#calculate percentage of test cases based on actual frequency
+confusion = merge(confusion, actual)
+confusion$Percent = confusion$Freq/confusion$ActualFreq*100
+
+#render plot
+# we use three different layers
+# first we draw tiles and fill color based on percentage of test cases
+tile <- ggplot() +
+  geom_tile(aes(x=Actual, y=Predicted,fill=Percent),data=confusion, color="black",size=0.1) +
+  labs(x="Actual",y="Predicted")
+tile = tile + 
+  geom_text(aes(x=Actual,y=Predicted, label=sprintf("%.1f", Percent)),data=confusion, size=3, colour="black") +
+  scale_fill_gradient(low="grey",high="red")
+
+# lastly we draw diagonal tiles. We use alpha = 0 so as not to hide previous layers but use size=0.3 to highlight border
+tile = tile + 
+  geom_tile(aes(x=Actual,y=Predicted),data=subset(confusion, as.character(Actual)==as.character(Predicted)), color="black",size=0.3, fill="black", alpha=0) 
+
+#render
+tile
+
+```
+
+**Results:**
+
+The model gives an accuracy of 81.96%. This is expected of naive-bayes model as it is not very efficient in modeling for multi-class classification.
+
+**Prediction:**
+
+The naive-bayes model has also predicted the pincode lines of the data-set correctly.
+
+## Support Vector Machines:
+
+The *SVM classifier* is *a* frontier which best segregates the two classes (hyper-plane/ *line*).
+
+Multiclass SVMs are usually implemented by combining several two-class SVMs. The one-versus-all method using winner-takes-all strategy and the one-versus-one method implemented by max-wins voting are popularly used for this purpose.
+
+One-vs-one method was used for this classification. The model was trained and tested on the same train-test data.
+
+The train-test data gave an accuracy of 98.87%. The same model was used to run it for the testing data(.tes file)
+
+Results of the testing-set
+
+```{r,echo=FALSE,message=FALSE,table=FALSE}
+require(e1071)
+require(caret)
+pen_digits = read.csv("pendigits_training_f.csv")
+
+pen_digits$Digit <- as.factor(pen_digits$Digit)
+set.seed(1286)
+train = sample(1:nrow(pen_digits), floor(0.8 * nrow(pen_digits)))
+
+svm.pen_digits = svm(Digit~., data=pen_digits[train, ],kernel="linear",cost=10)
+svm.predict = predict(svm.pen_digits, pen_digits[-train, ], type="class")
+svm.cm = confusionMatrix(table(svm.predict, pen_digits[-train, ]$Digit))
+
+
+##Test data 
+pen_digits_testdata=read.csv("pen_digits_tesfile.csv")
+pen_digits_testdata$Digit <- as.factor(pen_digits_testdata$Digit)
+svm.predict_test_data = predict(svm.pen_digits, pen_digits_testdata, type="class")
+#with(pen_digits_testdata, table(rf.predict_test_data, Digit))
+svm.cm = confusionMatrix(table(svm.predict_test_data,pen_digits_testdata$Digit))
+
+#Pincode test
+pen_digits_pincode=read.csv("pen_digits_predict_f.csv")
+pen_digits_pincode$Digit <- as.factor(pen_digits_pincode$Digit)
+pendigits_pincode_pred_svm = predict(svm.pen_digits, pen_digits_pincode, type="class")
+
+##Heat-map CM
+#generate random data 
+data = data.frame(pen_digits_testdata$Digit,svm.predict_test_data)
+names(data) = c("Actual", "Predicted")
+
+#compute frequency of actual categories
+actual = as.data.frame(table(data$Actual))
+names(actual) = c("Actual","ActualFreq")
+
+#build confusion matrix
+confusion = as.data.frame(table(data$Actual, data$Predicted))
+names(confusion) = c("Actual","Predicted","Freq")
+
+#calculate percentage of test cases based on actual frequency
+confusion = merge(confusion, actual)
+confusion$Percent = confusion$Freq/confusion$ActualFreq*100
+
+#render plot
+# we use three different layers
+# first we draw tiles and fill color based on percentage of test cases
+tile <- ggplot() +
+  geom_tile(aes(x=Actual, y=Predicted,fill=Percent),data=confusion, color="black",size=0.1) +
+  labs(x="Actual",y="Predicted")
+tile = tile + 
+  geom_text(aes(x=Actual,y=Predicted, label=sprintf("%.1f", Percent)),data=confusion, size=3, colour="black") +
+  scale_fill_gradient(low="grey",high="red")
+
+# lastly we draw diagonal tiles. We use alpha = 0 so as not to hide previous layers but use size=0.3 to highlight border
+tile = tile + 
+  geom_tile(aes(x=Actual,y=Predicted),data=subset(confusion, as.character(Actual)==as.character(Predicted)), color="black",size=0.3, fill="black", alpha=0) 
+
+#render
+tile
+
+```
+
+**Results:**
+
+The model gives an accuracy of 95.63% on the testing data. This is one of the most durable and efficient models for classification.
+
+**Neural Network:**
+
+*Artificial Neural Network* is a computational algorithm which can be used for pattern recognition and machine learning, these are presented as systems of interconnected neurons which can compute values from inputs
+
+Building an ANN model is very expensive and requires lot of data to train and prone to over-fitting sometimes.
+
+Current classification problem used an ANN with 2 hidden layers and 6,4 neurons per each layer with step-max of 1e+06 using a logistic activation function.
+
+The model required very high processing power and did not converge in the cases with high threshold,In the iterations that were converged the average accuracy was pretty low at \~70%
+
+## Neural Network Model Structure:
+
+image : ![](./ANN_NN.jpeg)
+
+## Random Forests:
+
+*Random forest* is a classification algorithm consisting of many decisions trees. It uses bagging and feature randomness when building each individual tree to try to create an uncorrelated forest of trees whose prediction by committee is more accurate than that of any individual tree.
+
+The number of trees are taken to be 1000 for stable results, and mtry value was taken as default that is 3(sqrt(9)). The confusion matrix displayed above gave an accuracy of 99.33 % for the test data of the training set. Similar trials for mtry=6 and mtry=9 are performed which yielded the results of 99.07% and 98.53% respectively.
+
+What is mtry? - The number of variables to be considered at each split. When mtry= 16 it is similar to running a model for bagging.
+
+```{r,echo=FALSE,message=FALSE,table=FALSE}
+require(randomForest)
+require(caret)
+require(ggplot2)
+pen_digits = read.csv("pendigits_training_f.csv")
+
+pen_digits$Digit <- as.factor(pen_digits$Digit)
+set.seed(1286)
+train = sample(1:nrow(pen_digits), floor(0.8 * nrow(pen_digits)))
+
+rf.pen_digits = randomForest(Digit~., data=pen_digits[train, ],ntree=1000)
+rf.predict = predict(rf.pen_digits, pen_digits[-train, ], type="class")
+#with(pen_digits[-train, ], table(rf.predict, Digit))
+rf.cm = confusionMatrix(table(rf.predict, pen_digits[-train, ]$Digit))
+
+rf.pen_digits_6 = randomForest(Digit~., data=pen_digits[train, ],ntree=1000,mtry=6)
+rf.predict_6 = predict(rf.pen_digits_6, pen_digits[-train, ], type="class")
+#with(pen_digits[-train, ], table(rf.predict, Digit))
+rf.cm_6 = confusionMatrix(table(rf.predict_6, pen_digits[-train, ]$Digit))
+
+#rf.pen_digits
+#plot(rf.predict)
+##mtry=9
+rf.pen_digits_9 = randomForest(Digit~., data=pen_digits[train, ],ntree=1000,mtry=16)
+rf.predict_9 = predict(rf.pen_digits_9, pen_digits[-train, ], type="class")
+
+rf.cm_9 = confusionMatrix(table(rf.predict_9, pen_digits[-train, ]$Digit))
+
+
+
+
+##Test data 
+pen_digits_testdata=read.csv("pen_digits_tesfile.csv")
+set.seed(128)
+pen_digits_testdata$Digit <- as.factor(pen_digits_testdata$Digit)
+rf.predict_test_data = predict(rf.pen_digits, pen_digits_testdata, type="class")
+
+rf.cm = confusionMatrix(table(rf.predict_test_data,pen_digits_testdata$Digit))
+
+
+
+
+
+
+#Testing 14260
+pen_digits_pincode=read.csv("pen_digits_predict_f.csv")
+pen_digits_pincode$Digit <- as.factor(pen_digits_pincode$Digit)
+pendigits_pincode_pred = predict(rf.pen_digits, pen_digits_pincode, type="class")
+
+
+
+
+##Heat-map CM
+#generate random data 
+data = data.frame(pen_digits_testdata$Digit,rf.predict_test_data)
+names(data) = c("Actual", "Predicted")
+
+#compute frequency of actual categories
+actual = as.data.frame(table(data$Actual))
+names(actual) = c("Actual","ActualFreq")
+
+#build confusion matrix
+confusion = as.data.frame(table(data$Actual, data$Predicted))
+names(confusion) = c("Actual","Predicted","Freq")
+
+#calculate percentage of test cases based on actual frequency
+confusion = merge(confusion, actual)
+confusion$Percent = confusion$Freq/confusion$ActualFreq*100
+
+#render plot
+# we use three different layers
+# first we draw tiles and fill color based on percentage of test cases
+tile <- ggplot() +
+  geom_tile(aes(x=Actual, y=Predicted,fill=Percent),data=confusion, color="black",size=0.1) +
+  labs(x="Actual",y="Predicted")
+tile = tile + 
+  geom_text(aes(x=Actual,y=Predicted, label=sprintf("%.1f", Percent)),data=confusion, size=3, colour="black") +
+  scale_fill_gradient(low="grey",high="red")
+
+# lastly we draw diagonal tiles. We use alpha = 0 so as not to hide previous layers but use size=0.3 to highlight border
+tile = tile + 
+  geom_tile(aes(x=Actual,y=Predicted),data=subset(confusion, as.character(Actual)==as.character(Predicted)), color="black",size=0.3, fill="black", alpha=0) 
+
+#render
+tile
+```
+
+**Results:**
+
+The random forests yielded best result of 99.33 at default random forest model, which considers sqrt(no.of variables) while splitting the trees. The test data-set on the same model gave an accuracy of 96.46%
+
+## XG Boost:
+
+*XG Boost* is an implementation of gradient boosted decision trees, three main forms of gradient boosting are supported gradient boosting, stochastic gradient boosting and regularized gradient boosting, it has ability to do parallel computing on a single machine and is faster
+
+For classification we used gbtree as the booster
+
+Error Vs Iteration Plot
+
+![](./error.png)
+
+![](cf_xbg.png)
+
+**Results:**
+
+The XGBoost yielded an accuracy of \~ 96.4% on the test data
+
+## Ensemble Model:
+
+Tried combining different classification models in order to get better accuracy on the test data, The Ensemble between XGBoost and KNN classifier has an improved accuracy over the individual models by 0.3%, base model of XGBoost is considered and KNN is applied to the predictors where the probability of the prediction \<=0.7
+
+## Training and Test Accuracies of Various Models:
+
+```{r,echo=FALSE,message=FALSE,table=FALSE,warning=FALSE}
+
+df <- data.frame(index=c("KNN","Logistic reg","RF","SVM","NB","XGBoost","XGBoost+KNN"),test_accuracy=c(97.6,89.7,96.46,95.63,81.96,96.369,97.59),train_accuracy=c(99.2,94.6,99.33,98.87,87.38,97.5,99.1))
+
+m_data <- melt(df,id.vars=c("index"))
+p1 <- ggplot(m_data,aes(x=index,y=value,group=variable,colour=variable))+geom_line()+xlab("Model Type")+ylab("Accuracy")+ggtitle("Accuracy Vs Model Type")+expand_limits(y=0)+geom_point()
+p1
+
+```
+
+## Conclusion:
+
+The classification accuracy for most of the models constructed were above ~95%, among these Ensemble (XGBoost + KNN) and KNN performed best.Random Forests and SVM have also performed good with efficiencies of 96% and 95% respectively. As expected multi-class logistic regression, naive-bayes did not produce desirable results for multi-class classification.  
+
+**Challenges:**
+
+Neural networks could not converge for the given data-set for many iterations mainly due to lack of computational resources. Going forward, neural network models could be leveraged as we have good amount of data.
+
+**Contribution:**
+
+Saketh Pachika- Gathered prior information for the project, implemented neural network, XG-Boost algorithms.
+
+Sreevidya Baddam- Implemented knn algorithm, logistic regression algorithms.
+
+Vivek Nichenametla- Random Forests, SVM and Naive-Bayes algorithms.
+
+All the three have contributed to the project report rendering and additional research.
+
+**Citations:**
+
+[1] David Meyer, Evgenia Dimitriadou, Kurt Hornik, Andreas Weingessel and Friedrich Leisch (2012). e1071: Misc Functions of the Department of Statistics (e1071), TU Wien. R package version 1.6-1. <http://CRAN.R-project.org/package=e1071> 
+[2] Venables, W. N. & Ripley, B. D. (2002) Modern Applied Statistics with S. Fourth Edition. Springer, New York. ISBN 0-387-95457-0 
+[3] Keysers et al. "Deformation Models for Image Recognition," IEEE Transactions on Pattern Analysis and Machine Intelligence, Vol. 29, No. 8. August 2007, pg. 1430. 
+[4] A Survey of Handwritten Character Recognition with MNIST and EMNIST
